@@ -1,0 +1,220 @@
+<html>
+  <head>
+    <title>CIT 595: Arduino Temperature Sensor</title>
+
+    <!-- Scripts for jquery lineplot -->
+    <script type="text/javascript" language="javascript" src="https://code.jquery.com/jquery-1.11.3.min.js"></script>
+    <script type="text/javascript" language="javascript" src="https://cdnjs.cloudflare.com/ajax/libs/flot/0.8.2/jquery.flot.min.js"></script>
+
+    <!-- Link for bootstrap -->
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css"></link>
+
+    <!-- Scripts for getting signals from server -->
+    <script type="text/javascript">
+      //if stdby is 0, standby off
+      //if stdby is 1, stnadby on
+      var stdby = 0;
+
+      // variables for recording temperature stats
+      var temp_i = 0;
+      var temps_c = [];
+      var temps_f = [];
+      var low_c = null;
+      var low_f = null;
+      var high_c = null;
+      var high_f = null;
+      var total_c = 0;
+      var total_f = 0;
+      var show_f = false;
+
+      // standby functions
+      function stdbyOn() {
+        stdby = 1;
+      }
+      function stdbyOff() {
+        stdby = 0;
+      }
+
+      function getThreshold() {
+        var hot = document.getElementByName('hot_threshold').value;
+        var cold = document.getElementByName('cold_threshold').value;
+        document.getElementById('submit_threshold').action = '/action?threshold=' + hot + ',' + cold;
+      }
+
+      // Celsius/Fahrenheit conversion functions
+      function show_f_off() {
+        show_f = false;
+      }
+      function show_f_on() {
+        show_f = true;
+      }
+
+      function Main() {
+        document.getElementById("most_recent").innerHTML = "Page loaded, please wait...";
+        setTimeout(Update, 1000);
+      }
+
+      function Update() {
+        setTimeout(Update, 1000);
+        var request = new XMLHttpRequest();
+        request.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+            if (this.responseText != null) {
+
+              // if stdby is 0, print out updated temperature, update plot
+              if (stdby == 0) {
+
+                temp_i += 1;
+                var temp = request.responseText.split(" ")[0];
+                temp_c = parseFloat(temp);
+                temp_f = temp_c * 1.8 + 32;
+
+                // update high/low
+                if (low_c == null || low_c > temp_c) {
+                  if (temp_c != 0) {
+                    low_c = temp_c;
+                    low_f = temp_f;
+                  }
+                }
+                if (high_c == null || high_c < temp_c) {
+                  high_c = temp_c;
+                  high_f = temp_f;
+                }
+                total_c += temp_c;
+                total_f += temp_f;
+
+                if (show_f) {
+                  document.getElementById("most_recent").innerHTML = temp_f + " degrees F";
+                  document.getElementById("high").innerHTML = high_f;
+                  document.getElementById("low").innerHTML = low_f;
+                  document.getElementById("average").innerHTML = total_f/temp_i;
+                }
+                else {
+                  document.getElementById("most_recent").innerHTML = temp_c + " degrees C";
+                  document.getElementById("high").innerHTML = high_c;
+                  document.getElementById("low").innerHTML = low_c;
+                  document.getElementById("average").innerHTML = total_c/temp_i;
+                }
+
+                // update display and plot
+                temps_c[temp_i] = [temp_i, temp_c];
+                temps_f[temp_i] = [temp_i, temp_f];
+                if (show_f) {
+                  $.plot($("#temperature_plot"), [temps_f]);
+                }
+                else {
+                  $.plot($("#temperature_plot"), [temps_c]);
+                }
+              }
+              else if (stdby == 1) {
+                document.getElementById("most_recent").innerHTML = "<em>Device in standby mode.</em>";
+              }
+            }
+          }
+          else {
+            document.getElementById("debugging").innerHTML = 
+              "Ready state: " + this.readyState + "\nStatus: " + this.status;
+          }
+        }
+        request.open("GET", "update", true);
+        request.send(null);
+      }
+
+    </script>
+
+
+    <!-- PLOTTING STYLE -->
+    <style type="text/css">
+      body { font-family: Verdana, Arial, sans-serif; font-size: 12px; }
+        #temperature_plot { width: 450px; height: 200px; }
+    </style>
+
+  </head>
+
+  <body onload="Main();">
+
+    <!-- Page title -->
+    <div class="container-fluid" style="text-align:center;">
+      <h1 style="">CIT 595: Arduino Temperature Sensor</h1>
+      <h2>Paul Hsu, Brian Hardy, and John Hall</h2>
+    </div>
+
+    <!-- User interface -->
+    <div class="container-fluid" style="text-align:center;">
+      <h2>User controls</h2>
+      <div class="row">
+
+        <!-- Temperature Conversion -->
+        <div class="col-sm-4">
+          <form method="post" action="/action?disp=C">
+            <button id="" class="" onclick="show_f_off()">Degrees C</button>
+          </form>
+          <form method="post" action="/action?disp=F">
+            <button id="" class="" onclick="show_f_on()">Degrees F</button>
+          </form>
+        </div>
+
+        <!-- Fan buttons -->
+        <div class="col-sm-4">
+          <form method="post" action="/action?fan=on">
+            <button id="" class="">Fan on</button>
+          </form>
+          <form method="post" action="/action?fan=off">
+            <button id="" class="">Fan off</button>
+          </form>
+        </div>
+
+        <!-- Standby buttons -->
+        <div class="col-sm-4">
+          <form method="post" action="/action?stdby=on">
+            <input type="button" id="" onclick = "stdbyOn()" value="Standby on">
+          </form>
+          <form method="post" action="/action?stdby=off">
+            <input type="button" id="" onclick = "stdbyOff()" value="Standby off">
+          </form>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="container-fluid" style="text-align:center;">
+
+      <div class="thresholds" style="padding:5px;">
+        <form method="get" id="submit_threshold" action="/action?threshold">
+        <b>Hot threshold: </b><input type="text" name="hot_threshold">
+        <b>Cold threshold: </b><input type="text" name="cold_threshold">
+        <input onclick="getThreshold()" type="submit" value="Set"><br>
+        </form>
+      </div>
+
+    </div>
+
+    <!-- Displayed results -->
+    <div class="container-fluid">
+      <h2>Temperature Stats</h2>
+      <p><b>Most recent: </b><span id="most_recent"></span></p> 
+      <p><b>High: </b><span id="high"></span></p> 
+      <p><b>Low: </b><span id="low"></span></p> 
+      <p><b>Average: </b><span id="average"></span></p> 
+    </div>
+
+
+    <!-- TESTING GRAPHING -->
+    <div class="container-fluid">
+
+      <h2>Recorded temperatures this hour</h2>
+      <div id="temperature_plot"></div>
+
+    </div>
+
+    <div>
+      <p id="debugging"></p>
+    </div>
+
+  </body>
+
+</html>
+
+ 
+ 
+ 
